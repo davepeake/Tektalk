@@ -6,6 +6,7 @@ Module to control a TekTronix Scope using it's socket server functionality
 import socket
 import select
 import logging
+import time
 
 import numpy
 
@@ -55,12 +56,23 @@ class TekSocket:
             data = data[:-2]
             if data[0] == '>':
                 data = data[1:]
-
+        
         data = data.strip()
-        self.debug_msg('Recieved: %s' % (data.rstrip()))
+        self.debug_msg('Received: %s' % (data.rstrip()))
 
         return data
 
+    def recv_raw(self):
+        data = ''
+        bDone = 0
+        while not bDone:
+            rl, wl, xl = select.select([self.sock, ], [], [], 1)
+            if len(rl) == 0:
+                bDone = 1
+            else:
+                data += self.sock.recv(4096)
+
+        return data
 
 class TekScope:
     def __init__(self, ip, port,verbose=False):
@@ -198,15 +210,28 @@ class TekScope:
 
         return meas_dict
 
+    def getScreenshot(self, filename):
+        self.T.send('SAVE:IMAG:FILEF PNG')
+        self.T.send('HARDCOPY START')
+        time.sleep(1)
+        self.T.send('!r')
+        buff = self.T.recv()
+
+        with open(filename, 'wb') as fout:
+            fout.write(buff[2:])
+
+        print len(buff)
+        
     def saveToUSB(self, filename):
         self.T.send('SAVe:WAVEform:FILEFormat SPREADSheet')
         self.T.send('SAVe:WAVEform:ALL, "E:/%s' % (filename))
 
 if __name__ == '__main__':
-    T = TekScope('192.168.0.111', 4000, verbose=True)
+    T = TekScope('192.168.0.112', 4000, verbose=True)
 
     print T.getMeasurement('RISE')
     print T.setHorizontal(scale=2E-6, pos=25)
     print T.setVertical(1, scale=200E-3, pos=0, coupling='DC')
     print T.setEdgeTrigger(slope='FALL', mode='AUTO')
     print T.setTriggerLvl(0.5)
+    T.getScreenshot('test.png')
