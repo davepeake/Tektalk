@@ -52,11 +52,13 @@ class TekSocket:
             else:
                 data += self.sock.recv(4096)
 
+        self.debug_msg('Received: %s' % (data.rstrip()))
+
         if self.terminal:
             data = data[:-2]
-            if data[0] == '>':
-                data = data[1:]
-        
+            while(data[0] == '>'):
+                data = data[1:].strip()
+
         data = data.strip()
         self.debug_msg('Received: %s' % (data.rstrip()))
 
@@ -127,6 +129,9 @@ class TekScope:
 
         if coupling is not None:
             self.T.send('CH%d:COUP %s' % (ch, coupling))
+
+    def setImpedance(self, ch, imp):
+        self.T.send('CH%d:IMP %s' % (ch, imp))
 
     def setEdgeTrigger(self, slope=None, source=None, coupling=None,
                        mode=None):
@@ -211,17 +216,27 @@ class TekScope:
         return meas_dict
 
     def getScreenshot(self, filename):
+
         self.T.send('SAVE:IMAG:FILEF PNG')
         self.T.send('HARDCOPY START')
         time.sleep(1)
         self.T.send('!r')
         buff = self.T.recv()
 
-        with open(filename, 'wb') as fout:
-            fout.write(buff[2:])
+        # find png header
+        buffstart = buff.find('\x89PNG')
 
-        print len(buff)
-        
+        self.T.debug_msg('Buffstart: %d' % (buffstart))
+
+        if filename is None:
+            return buff[buffstart:]
+
+        # otherwise
+        with open(filename, 'wb') as fout:
+            fout.write(buff[buffstart:])
+
+        return buff[buffstart:]
+
     def saveToUSB(self, filename):
         self.T.send('SAVe:WAVEform:FILEFormat SPREADSheet')
         self.T.send('SAVe:WAVEform:ALL, "E:/%s' % (filename))
